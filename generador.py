@@ -17,16 +17,15 @@ def obtener_fuente():
         return "Helvetica-Bold"
 
 # dibujar titulo
-def dibujar_titulo(c, ancho_hoja, alto_hoja, fuente_usada):
+def dibujar_titulo(c, ancho_hoja, alto_hoja, fuente_usada, margen_superior_y):
     """Dibuja solo la parte del título en el canvas 'c'."""
     
-    # medidas de titulo
+    # medidas de titulo 
     posicion_x_titulo = 5.52 * cm
     ancho_titulo = 9.97 * cm
     alto_titulo = 1.18 * cm
-    margen_superior_y = 1.1 * cm 
     
-    # poscion de Y 
+    # poscion de Y calculada con el margen variable
     posicion_y_titulo = alto_hoja - margen_superior_y - alto_titulo
 
     # cuadro rojo
@@ -49,7 +48,7 @@ def dibujar_titulo(c, ancho_hoja, alto_hoja, fuente_usada):
     altura_linea_2 = posicion_y_titulo + 0.25*cm
     c.drawCentredString(centro_x_titulo, altura_linea_2, "339.1 - 343.08")
 
-# nuevo metodo: dibuja un solo cuadro en la posicion x, y que le pasen
+# dibujo de cuadros segun x y
 def dibujar_cuadro(c, x, y):
     """Recibe la ubicación (x, y) y dibuja un cuadro."""
     
@@ -65,53 +64,56 @@ def dibujar_cuadro(c, x, y):
 
 # funcion principal
 def generar_etiqueta_completa():
-    nombre_archivo = "etiqueta_completa7.pdf"
+    nombre_archivo = "etiqueta_completa8.pdf"
     
     c = canvas.Canvas(nombre_archivo, pagesize=A4)
     ancho_hoja, alto_hoja = A4
-    
-    # configuracio nde fuente
     fuente_actual = obtener_fuente()
     
-    # deibujar el titulo fijo
-    dibujar_titulo(c, ancho_hoja, alto_hoja, fuente_actual)
+    # ***************************** configuracion de margenes de impresion
     
-    # ************** logica de cuadros
+    margen_superior_papel = 1.1 * cm      # margen superior -- tituño
+    margen_izquierdo_papel = 0.4 * cm     # margen isquierdo -- primera columna
+    
+    espacio_entre_columnas = 0.15 * cm    # espaciado horizontal
+    espacio_entre_filas = 0.06 * cm       # espaciado vertical
+    
+    y_inicial_grid = 2.70 * cm            # inicio del primer cuadro
+    
+    # dibujo de titulo
+    dibujar_titulo(c, ancho_hoja, alto_hoja, fuente_actual, margen_superior_papel)
+    
+    #*********************** logica de cuadros
     
     alto_cuadro = 3.28 * cm
-    
-    # y de la priemra fila
-    y_inicial = 2.73 * cm
-
-    # espacio entre filas
-    espacio_entre_filas = 0.06 * cm 
-    
-    # filas totals
+    ancho_cuadro = 6.56 * cm
     numero_de_filas = 8
+    numero_de_columnas = 3
 
-    # posiciones Y automaticas
+    # calculo de posiciones Y
     lista_filas_y = []
-    posicion_actual = y_inicial
+    posicion_y_actual = y_inicial_grid
     
     for i in range(numero_de_filas):
-        lista_filas_y.append(posicion_actual)
-        # siguientes posiciones
-        posicion_actual = posicion_actual + alto_cuadro + espacio_entre_filas
+        lista_filas_y.append(posicion_y_actual)
+        posicion_y_actual = posicion_y_actual + alto_cuadro + espacio_entre_filas
 
-    # ubicaciones x
-    ubicaciones_x = [0.3 * cm, 7.05 * cm, 13.79 * cm]
+    # calculo posiciones X
+    ubicaciones_x = []
+    posicion_x_actual = margen_izquierdo_papel
     
-    # bucle que recorre las filas calculadas
+    for i in range(numero_de_columnas):
+        ubicaciones_x.append(posicion_x_actual)
+        posicion_x_actual = posicion_x_actual + ancho_cuadro + espacio_entre_columnas
+
+    # dibujar grilla
     for y_arriba in lista_filas_y:
-        
-        # calculamos la y real para esta fila completa (reportlab mide desde abajo)
+        # calcular la nueva coordenada Y segun ReportLab
         posicion_y_real = alto_hoja - y_arriba - alto_cuadro
         
-        # bucle que recorre las columnas de esta fila
         for x in ubicaciones_x:
             dibujar_cuadro(c, x, posicion_y_real)
     
-    # guardar el pdf
     c.showPage()
     c.save()
     print(f"Generado correctamente: {nombre_archivo}")
