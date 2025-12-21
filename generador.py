@@ -30,9 +30,9 @@ def dibujar_titulo(c, ancho_hoja, alto_hoja, fuente_usada):
     posicion_y_titulo = alto_hoja - margen_superior_y - alto_titulo
 
     # cuadro rojo
-    c.setStrokeColorRGB(1, 0, 0) 
-    c.setLineWidth(1)
-    c.rect(posicion_x_titulo, posicion_y_titulo, ancho_titulo, alto_titulo)
+    #c.setStrokeColorRGB(1, 0, 0) 
+    #c.setLineWidth(1)
+    #c.rect(posicion_x_titulo, posicion_y_titulo, ancho_titulo, alto_titulo)
 
     # text negro
     c.setFillColorRGB(0, 0, 0) 
@@ -56,34 +56,33 @@ def dibujar_cuerpo(c, ancho_hoja, alto_hoja):
     # medidas del cuerpo para todos
     ancho_cuadros = 6.56 * cm
     
-    # centrado horizoltal temporal
-    posicion_x_cuadros = (ancho_hoja - ancho_cuadros) / 2
+    # definimos alto igual para todos segun instrucciones
+    alto_cuadros = 3.28 * cm
+    
+    # posicion y desde arriba segun indicacion 2.73
+    y_arriba = 2.73 * cm
 
-    # Alturas de ejemplo (esperando tus medidas reales)
-    alto_cuadro_1 = 3.28 * cm
-    alto_cuadro_2 = 3.28 * cm
-    alto_cuadro_3 = 3.28 * cm
-
-    # posicion de inicio - debajo del titulo
-    posicion_y_inicio = 20 * cm 
+    # calcular la posicion y desde abajo para reportlab
+    posicion_y = alto_hoja - y_arriba - alto_cuadros
 
     c.setLineWidth(1)
     c.setStrokeColorRGB(0, 0, 0)
 
     # cuadro 1
-    c.rect(posicion_x_cuadros, posicion_y_inicio, ancho_cuadros, alto_cuadro_1)
+    # ubicacion x 0.3 y 2.73
+    c.rect(0.3 * cm, posicion_y, ancho_cuadros, alto_cuadros)
     
     # cuadro 2
-    y_cuadro_2 = posicion_y_inicio - alto_cuadro_2 - 0.5*cm 
-    c.rect(posicion_x_cuadros, y_cuadro_2, ancho_cuadros, alto_cuadro_2)
+    # ubicacion x 7.05 y 2.73
+    c.rect(7.05 * cm, posicion_y, ancho_cuadros, alto_cuadros)
     
     # cuadro 3
-    y_cuadro_3 = y_cuadro_2 - alto_cuadro_3 - 0.5*cm
-    c.rect(posicion_x_cuadros, y_cuadro_3, ancho_cuadros, alto_cuadro_3)
+    # ubicacion x 13.79 y 2.73
+    c.rect(13.79 * cm, posicion_y, ancho_cuadros, alto_cuadros)
 
 # funcion principal
 def generar_etiqueta_completa():
-    nombre_archivo = "etiqueta_completa.pdf"
+    nombre_archivo = "etiqueta_completa2.pdf"
     
     c = canvas.Canvas(nombre_archivo, pagesize=A4)
     ancho_hoja, alto_hoja = A4
