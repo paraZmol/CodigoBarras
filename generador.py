@@ -49,7 +49,7 @@ def dibujar_titulo(c, ancho_hoja, alto_hoja, fuente_usada):
     altura_linea_2 = posicion_y_titulo + 0.25*cm
     c.drawCentredString(centro_x_titulo, altura_linea_2, "339.1 - 343.08")
 
-# dibujar cuadro segun la posicion x y
+# nuevo metodo: dibuja un solo cuadro en la posicion x, y que le pasen
 def dibujar_cuadro(c, x, y):
     """Recibe la ubicación (x, y) y dibuja un cuadro."""
     
@@ -65,7 +65,7 @@ def dibujar_cuadro(c, x, y):
 
 # funcion principal
 def generar_etiqueta_completa():
-    nombre_archivo = "etiqueta_completa5.pdf"
+    nombre_archivo = "etiqueta_completa7.pdf"
     
     c = canvas.Canvas(nombre_archivo, pagesize=A4)
     ancho_hoja, alto_hoja = A4
@@ -76,28 +76,35 @@ def generar_etiqueta_completa():
     # deibujar el titulo fijo
     dibujar_titulo(c, ancho_hoja, alto_hoja, fuente_actual)
     
-    # definimos alto del cuadro para calcular la y de reportlab
+    # ************** logica de cuadros
+    
     alto_cuadro = 3.28 * cm
     
-    # definimos un espacio visual entre filas (1 milimetro)
-    espacio_entre_filas = 0.05 * cm
-    
-    # definimos la Y inicial de la primera fila
+    # y de la priemra fila
     y_inicial = 2.73 * cm
 
-    # calculo de la segunda fila
-    fila_2_y = y_inicial + alto_cuadro + espacio_entre_filas
+    # espacio entre filas
+    espacio_entre_filas = 0.06 * cm 
     
-    # inclusion de espacio
-    lista_filas_y = [y_inicial, fila_2_y]
+    # filas totals
+    numero_de_filas = 8
+
+    # posiciones Y automaticas
+    lista_filas_y = []
+    posicion_actual = y_inicial
     
-    # lista de ubicaciones horizontales (x)
+    for i in range(numero_de_filas):
+        lista_filas_y.append(posicion_actual)
+        # siguientes posiciones
+        posicion_actual = posicion_actual + alto_cuadro + espacio_entre_filas
+
+    # ubicaciones x
     ubicaciones_x = [0.3 * cm, 7.05 * cm, 13.79 * cm]
     
-    # bucle que recorre las filas
+    # bucle que recorre las filas calculadas
     for y_arriba in lista_filas_y:
         
-        # calculamos la y real para esta fila completa
+        # calculamos la y real para esta fila completa (reportlab mide desde abajo)
         posicion_y_real = alto_hoja - y_arriba - alto_cuadro
         
         # bucle que recorre las columnas de esta fila
