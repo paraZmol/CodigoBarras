@@ -49,40 +49,23 @@ def dibujar_titulo(c, ancho_hoja, alto_hoja, fuente_usada):
     altura_linea_2 = posicion_y_titulo + 0.25*cm
     c.drawCentredString(centro_x_titulo, altura_linea_2, "339.1 - 343.08")
 
-# metodo 2, dibujar el cuerpo -- solo cuadro
-def dibujar_cuerpo(c, ancho_hoja, alto_hoja):
-    """Dibuja los cuadros del cuerpo en el canvas 'c'."""
+# dibujar cuadro segun la posicion x y
+def dibujar_cuadro(c, x, y):
+    """Recibe la ubicación (x, y) y dibuja un cuadro."""
     
-    # medidas del cuerpo para todos
-    ancho_cuadros = 6.56 * cm
-    
-    # definimos alto igual para todos segun instrucciones
-    alto_cuadros = 3.28 * cm
-    
-    # posicion y desde arriba segun indicacion 2.73
-    y_arriba = 2.73 * cm
-
-    # calcular la posicion y desde abajo para reportlab
-    posicion_y = alto_hoja - y_arriba - alto_cuadros
+    # medidas constantes del cuadro
+    ancho_cuadro = 6.56 * cm
+    alto_cuadro = 3.28 * cm
 
     c.setLineWidth(1)
     c.setStrokeColorRGB(0, 0, 0)
 
-    # cuadro 1
-    # ubicacion x 0.3 y 2.73
-    c.rect(0.3 * cm, posicion_y, ancho_cuadros, alto_cuadros)
-    
-    # cuadro 2
-    # ubicacion x 7.05 y 2.73
-    c.rect(7.05 * cm, posicion_y, ancho_cuadros, alto_cuadros)
-    
-    # cuadro 3
-    # ubicacion x 13.79 y 2.73
-    c.rect(13.79 * cm, posicion_y, ancho_cuadros, alto_cuadros)
+    # dibujar el rectangulo dinamico
+    c.rect(x, y, ancho_cuadro, alto_cuadro)
 
 # funcion principal
 def generar_etiqueta_completa():
-    nombre_archivo = "etiqueta_completa2.pdf"
+    nombre_archivo = "etiqueta_completa5.pdf"
     
     c = canvas.Canvas(nombre_archivo, pagesize=A4)
     ancho_hoja, alto_hoja = A4
@@ -90,9 +73,36 @@ def generar_etiqueta_completa():
     # configuracio nde fuente
     fuente_actual = obtener_fuente()
     
-    # deibujar el titulo y el cuerpo
+    # deibujar el titulo fijo
     dibujar_titulo(c, ancho_hoja, alto_hoja, fuente_actual)
-    dibujar_cuerpo(c, ancho_hoja, alto_hoja)
+    
+    # definimos alto del cuadro para calcular la y de reportlab
+    alto_cuadro = 3.28 * cm
+    
+    # definimos un espacio visual entre filas (1 milimetro)
+    espacio_entre_filas = 0.05 * cm
+    
+    # definimos la Y inicial de la primera fila
+    y_inicial = 2.73 * cm
+
+    # calculo de la segunda fila
+    fila_2_y = y_inicial + alto_cuadro + espacio_entre_filas
+    
+    # inclusion de espacio
+    lista_filas_y = [y_inicial, fila_2_y]
+    
+    # lista de ubicaciones horizontales (x)
+    ubicaciones_x = [0.3 * cm, 7.05 * cm, 13.79 * cm]
+    
+    # bucle que recorre las filas
+    for y_arriba in lista_filas_y:
+        
+        # calculamos la y real para esta fila completa
+        posicion_y_real = alto_hoja - y_arriba - alto_cuadro
+        
+        # bucle que recorre las columnas de esta fila
+        for x in ubicaciones_x:
+            dibujar_cuadro(c, x, posicion_y_real)
     
     # guardar el pdf
     c.showPage()
