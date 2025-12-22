@@ -5,9 +5,12 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import os
 
+# libreria code 39
+from reportlab.graphics.barcode import code39
+from reportlab.graphics.shapes import Drawing
+
 # funcion de la fuente
 def obtener_fuente():
-    """Registra la fuente Open Sans si existe, sino devuelve Helvetica."""
     ruta_fuente = "OpenSans-Bold.ttf"
     if os.path.exists(ruta_fuente):
         pdfmetrics.registerFont(TTFont('OpenSans-Bold', ruta_fuente))
@@ -16,9 +19,9 @@ def obtener_fuente():
         print(f"AVISO: No se encontró '{ruta_fuente}'. Usando Helvetica.")
         return "Helvetica-Bold"
 
-# dibujar titulo
+# dibujar titulo principal de la hoja
 def dibujar_titulo(c, ancho_hoja, alto_hoja, fuente_usada, margen_superior_y):
-    """Dibuja solo la parte del título en el canvas 'c'."""
+    """Dibuja solo la parte del título principal en el canvas 'c'."""
     
     # medidas de titulo 
     posicion_x_titulo = 5.52 * cm
@@ -27,11 +30,6 @@ def dibujar_titulo(c, ancho_hoja, alto_hoja, fuente_usada, margen_superior_y):
     
     # poscion de Y calculada con el margen variable
     posicion_y_titulo = alto_hoja - margen_superior_y - alto_titulo
-
-    # cuadro rojo
-    #c.setStrokeColorRGB(1, 0, 0) 
-    #c.setLineWidth(1)
-    #c.rect(posicion_x_titulo, posicion_y_titulo, ancho_titulo, alto_titulo)
 
     # text negro
     c.setFillColorRGB(0, 0, 0) 
@@ -48,23 +46,62 @@ def dibujar_titulo(c, ancho_hoja, alto_hoja, fuente_usada, margen_superior_y):
     altura_linea_2 = posicion_y_titulo + 0.25*cm
     c.drawCentredString(centro_x_titulo, altura_linea_2, "339.1 - 343.08")
 
-# dibujo de cuadros segun x y
-def dibujar_cuadro(c, x, y):
-    """Recibe la ubicación (x, y) y dibuja un cuadro."""
+# dibujo de cuadros
+def dibujar_cuadro(c, x, y, fuente, valor_codigo="12345"):
     
     # medidas constantes del cuadro
     ancho_cuadro = 6.56 * cm
     alto_cuadro = 3.28 * cm
 
+    # borde de cuadro
     c.setLineWidth(1)
     c.setStrokeColorRGB(0, 0, 0)
-
-    # dibujar el rectangulo dinamico
+    c.setFillColorRGB(0, 0, 0) 
     c.rect(x, y, ancho_cuadro, alto_cuadro)
+
+    # titulo interno
+    c.setFont(fuente, 10) 
+    titulo_interno = "Sistema de Bibliotecas UNASAM"
+    
+    # calculo y para el titulo de cada cuadro
+    alto_titulo_cuadro = 0.3*cm # alto con respecto a la linea superior de cada cuadro
+    y_texto = y + alto_cuadro - alto_titulo_cuadro - 0.2*cm
+    
+    # centro horizontal del cuadro
+    centro_x_cuadro = x + (ancho_cuadro / 2)
+    
+    c.drawCentredString(centro_x_cuadro, y_texto, titulo_interno)
+
+    # configuracion de codigo de barras
+    
+    alto_barras = 0.95 * cm 
+    ancho_barras = 0.035 * cm 
+    
+    barcode = code39.Standard39(
+        valor_codigo, 
+        barHeight=alto_barras, 
+        barWidth=ancho_barras, 
+        checksum=0 
+    )
+    
+    # calculo de posicion de codigo
+    
+    ancho_codigo_real = barcode.width
+    x_barcode = x + (ancho_cuadro / 2) - (ancho_codigo_real / 2)
+    
+    # Centrado Vertical (ajustado para no chocar con el titulo)
+    # altura visual total del codigo + texto abajo
+    altura_total_visual = 1.34 * cm
+    
+    # Podemos bajarlo un poquito más si sientes que choca con el título
+    y_barcode = y + (alto_cuadro - altura_total_visual) / 2 - 0.1*cm
+
+    barcode.drawOn(c, x_barcode, y_barcode)
+
 
 # funcion principal
 def generar_etiqueta_completa():
-    nombre_archivo = "etiqueta_completa8.pdf"
+    nombre_archivo = "etiqueta_con_titulos10.pdf"
     
     c = canvas.Canvas(nombre_archivo, pagesize=A4)
     ancho_hoja, alto_hoja = A4
@@ -72,15 +109,15 @@ def generar_etiqueta_completa():
     
     # ***************************** configuracion de margenes de impresion
     
-    margen_superior_papel = 1.1 * cm      # margen superior -- tituño
-    margen_izquierdo_papel = 0.4 * cm     # margen isquierdo -- primera columna
+    margen_superior_papel = 1.1 * cm      # margen superior
+    margen_izquierdo_papel = 0.4 * cm     # margen isquierdo
     
     espacio_entre_columnas = 0.15 * cm    # espaciado horizontal
     espacio_entre_filas = 0.06 * cm       # espaciado vertical
     
     y_inicial_grid = 2.70 * cm            # inicio del primer cuadro
     
-    # dibujo de titulo
+    # dibujo de titulo principal de hoja
     dibujar_titulo(c, ancho_hoja, alto_hoja, fuente_actual, margen_superior_papel)
     
     #*********************** logica de cuadros
@@ -107,12 +144,16 @@ def generar_etiqueta_completa():
         posicion_x_actual = posicion_x_actual + ancho_cuadro + espacio_entre_columnas
 
     # dibujar grilla
+    contador = 1
     for y_arriba in lista_filas_y:
         # calcular la nueva coordenada Y segun ReportLab
         posicion_y_real = alto_hoja - y_arriba - alto_cuadro
         
         for x in ubicaciones_x:
-            dibujar_cuadro(c, x, posicion_y_real)
+            codigo_prueba = f"1000{contador}" 
+            # Pasamos la fuente tambien para usarla dentro del cuadro
+            dibujar_cuadro(c, x, posicion_y_real, fuente_actual, valor_codigo=codigo_prueba)
+            contador += 1
     
     c.showPage()
     c.save()
