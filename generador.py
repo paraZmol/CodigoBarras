@@ -47,7 +47,7 @@ def dibujar_titulo(c, ancho_hoja, alto_hoja, fuente_usada, margen_superior_y):
     c.drawCentredString(centro_x_titulo, altura_linea_2, "339.1 - 343.08")
 
 # dibujo de cuadros
-def dibujar_cuadro(c, x, y, fuente, valor_codigo="12345"):
+def dibujar_cuadro(c, x, y, fuente, ajuste_y_barras, valor_codigo="12345"):
     
     # medidas constantes del cuadro
     ancho_cuadro = 6.56 * cm
@@ -64,50 +64,64 @@ def dibujar_cuadro(c, x, y, fuente, valor_codigo="12345"):
     titulo_interno = "Sistema de Bibliotecas UNASAM"
     
     # calculo y para el titulo de cada cuadro
-    alto_titulo_cuadro = 0.3*cm # alto con respecto a la linea superior de cada cuadro
+    alto_titulo_cuadro = 0.4*cm 
     y_texto = y + alto_cuadro - alto_titulo_cuadro - 0.2*cm
     
-    # centro horizontal del cuadro
     centro_x_cuadro = x + (ancho_cuadro / 2)
-    
     c.drawCentredString(centro_x_cuadro, y_texto, titulo_interno)
 
-    # configuracion de codigo de barras
+    # **************** configuracion visual y textual
     
-    alto_barras = 0.95 * cm 
-    ancho_barras = 0.035 * cm 
+    # altura total entre ambos
+    altura_total_visual = 1.34 * cm
+    
+    # medida de cada parte para un amximo de 1.34
+    alto_barras = 0.94 * cm
+    espacio_texto = altura_total_visual - alto_barras # aprox 0.4 cm
+    
+    # calcular la base Y del bloque
+    # formula: Y_base_cuadro + (Espacio libre / 2) + Ajuste manual
+    y_base_bloque = y + (alto_cuadro - altura_total_visual) / 2 + ajuste_y_barras
+
+    # dibujar el texto
+    c.setFont(fuente, 9)
+    
+    # formato de texto
+    texto_a_mostrar = f"*{valor_codigo}*" 
+    
+    # ligeramente por encima de la base
+    y_texto_codigo = y_base_bloque + 0.1 * cm 
+    c.drawCentredString(centro_x_cuadro, y_texto_codigo, texto_a_mostrar)
+
+    # dibujar las barras
+    ancho_barras = 0.045 * cm 
     
     barcode = code39.Standard39(
         valor_codigo, 
         barHeight=alto_barras, 
         barWidth=ancho_barras, 
-        checksum=0 
+        checksum=0,
+        humanReadable=False  # Desactivamos el automático para usar el nuestro manual
     )
-    
-    # calculo de posicion de codigo
     
     ancho_codigo_real = barcode.width
     x_barcode = x + (ancho_cuadro / 2) - (ancho_codigo_real / 2)
     
-    # Centrado Vertical (ajustado para no chocar con el titulo)
-    # altura visual total del codigo + texto abajo
-    altura_total_visual = 1.34 * cm
-    
-    # Podemos bajarlo un poquito más si sientes que choca con el título
-    y_barcode = y + (alto_cuadro - altura_total_visual) / 2 - 0.1*cm
+    # la posicion Y del codigo de barras es justo encima del espacio reservado para texto
+    y_barcode = y_base_bloque + espacio_texto + 0.03*cm
 
     barcode.drawOn(c, x_barcode, y_barcode)
 
 
 # funcion principal
 def generar_etiqueta_completa():
-    nombre_archivo = "etiqueta_con_titulos10.pdf"
+    nombre_archivo = "codigo_visual_numero2.pdf"
     
     c = canvas.Canvas(nombre_archivo, pagesize=A4)
     ancho_hoja, alto_hoja = A4
     fuente_actual = obtener_fuente()
     
-    # ***************************** configuracion de margenes de impresion
+    # ***************************** configuracion de margenes y ajustes
     
     margen_superior_papel = 1.1 * cm      # margen superior
     margen_izquierdo_papel = 0.4 * cm     # margen isquierdo
@@ -116,6 +130,9 @@ def generar_etiqueta_completa():
     espacio_entre_filas = 0.06 * cm       # espaciado vertical
     
     y_inicial_grid = 2.70 * cm            # inicio del primer cuadro
+    
+    # variable para mover el bloque completo (barras + numero)
+    ajuste_vertical_codigo = 0.1 * cm 
     
     # dibujo de titulo principal de hoja
     dibujar_titulo(c, ancho_hoja, alto_hoja, fuente_actual, margen_superior_papel)
@@ -146,13 +163,11 @@ def generar_etiqueta_completa():
     # dibujar grilla
     contador = 1
     for y_arriba in lista_filas_y:
-        # calcular la nueva coordenada Y segun ReportLab
         posicion_y_real = alto_hoja - y_arriba - alto_cuadro
         
         for x in ubicaciones_x:
             codigo_prueba = f"1000{contador}" 
-            # Pasamos la fuente tambien para usarla dentro del cuadro
-            dibujar_cuadro(c, x, posicion_y_real, fuente_actual, valor_codigo=codigo_prueba)
+            dibujar_cuadro(c, x, posicion_y_real, fuente_actual, ajuste_vertical_codigo, valor_codigo=codigo_prueba)
             contador += 1
     
     c.showPage()
