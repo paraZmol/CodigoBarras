@@ -25,11 +25,25 @@ class Config:
     NUMERO_ARCHIVO = "1"
     ABREVIACION_FACULTAD = "FIIA"
     
-    # fuente
+    # fuentes
     RUTA_FUENTE = "OpenSans-Bold.ttf"
     RUTA_FUENTE_CODE = "OpenSans-Semibold.ttf"
     
-    # argen de pagina
+    # configuracion de imagenes - logos
+    RUTA_LOGO_UNASAM = "logo-unasam.png"
+    RUTA_LOGO_FACULTAD = "facultad.png"
+    
+    # dimensiones y ubicacion de imagenes
+    ALTO_IMAGENES = 0.7 * cm
+    
+    # margenes horizontales para logos
+    MARGEN_X_LOGO_UNASAM = 0.7 * cm      # margen izquierdo para logo unasam
+    MARGEN_X_LOGO_FACULTAD = 0.7 * cm    # margen derecho para logo facultad
+    
+    # distancia vertical de las imagenes desde el codigo
+    DISTANCIA_Y_DESDE_CODIGO = -1.3 * cm
+    
+    # margen de pagina
     MARGEN_SUPERIOR = 1.1 * cm
     MARGEN_IZQUIERDO = 0.4 * cm
     
@@ -128,7 +142,7 @@ class LectorExcel:
             self.workbook.close()
 
 
-# ********************************************** generacion del pdf ********************************************** 
+# ********************************************** generacion del pdf **********************************************
 
 class GeneradorEtiquetas:
     """genera el pdf con las etiquetas de codigos de barras"""
@@ -138,14 +152,14 @@ class GeneradorEtiquetas:
         self.rango_inicial = rango_inicial
         self.rango_final = rango_final
         self.fuente_bold = None
-        self.fuente_light = None
+        self.fuente_code = None
         self._cargar_fuentes()
     
     # inicializacion 
     
     def _cargar_fuentes(self):
         """carga las fuentes personalizadas o usa alternativas"""
-        # fuente bold
+        # fuente bold (titulos)
         if os.path.exists(self.config.RUTA_FUENTE):
             pdfmetrics.registerFont(TTFont('OpenSans-Bold', self.config.RUTA_FUENTE))
             self.fuente_bold = "OpenSans-Bold"
@@ -153,13 +167,14 @@ class GeneradorEtiquetas:
             print(f"aviso - no se encontro '{self.config.RUTA_FUENTE}', usando helvetica-bold")
             self.fuente_bold = "Helvetica-Bold"
         
-        # fuente light
+        # fuente code (texto del codigo)
         if os.path.exists(self.config.RUTA_FUENTE_CODE):
-            pdfmetrics.registerFont(TTFont('OpenSans-Light', self.config.RUTA_FUENTE_CODE))
-            self.fuente_light = "OpenSans-Light"
+            # registramos con un nombre interno claro 'OpenSans-Code'
+            pdfmetrics.registerFont(TTFont('OpenSans-Code', self.config.RUTA_FUENTE_CODE))
+            self.fuente_code = "OpenSans-Code"
         else:
             print(f"aviso - no se encontro '{self.config.RUTA_FUENTE_CODE}', usando fuente principal")
-            self.fuente_light = self.fuente_bold
+            self.fuente_code = self.fuente_bold
     
     def _obtener_nombre_archivo(self):
         """genera el nombre del archivo pdf de salida"""
@@ -196,6 +211,34 @@ class GeneradorEtiquetas:
             f"{self.rango_inicial} - {self.rango_final}"
         )
     
+    # **************************** dibujo de elementos - imagenes ****************************
+    
+    def _dibujar_imagen(self, c, ruta_imagen, x, y, alto_deseado):
+        """dibuja una imagen redimensionada proporcionalmente"""
+        if not os.path.exists(ruta_imagen):
+            print(f"aviso - imagen no encontrada '{ruta_imagen}'")
+            return 0
+
+        try:
+            # obtener dimensiones reales
+            img_utils = ImageReader(ruta_imagen)
+            ancho_real, alto_real = img_utils.getSize()
+            
+            # calcular aspecto - ancho / alto
+            aspect_ratio = ancho_real / alto_real
+            
+            # calcular nuevo ancho basado en el alto deseado
+            nuevo_ancho = alto_deseado * aspect_ratio
+            
+            # dibujar imagen - reportlab dibuja desde esquina inferior izquierda
+            c.drawImage(ruta_imagen, x, y, width=nuevo_ancho, height=alto_deseado, mask='auto')
+            
+            return nuevo_ancho
+            
+        except Exception as e:
+            print(f"error al dibujar imagen {ruta_imagen} - {e}")
+            return 0
+            
     # **************************** dibujo de elementos - codigo de barras ****************************
     
     def _dibujar_codigo_barras(self, c, x_cuadro, y_base, codigo):
@@ -238,16 +281,16 @@ class GeneradorEtiquetas:
         ancho_util_texto = self.config.ANCHO_CUADRO - (2 * margen)
         x_inicio_texto = x_cuadro + margen
         
-        c.setFont(self.fuente_light, self.config.TAMANO_FUENTE_CODIGO)
+        c.setFont(self.fuente_code, self.config.TAMANO_FUENTE_CODIGO)
         
         # ajuste automatico del tamano de fuente si es necesario
-        ancho_texto_puro = c.stringWidth(codigo, self.fuente_light, self.config.TAMANO_FUENTE_CODIGO)
+        ancho_texto_puro = c.stringWidth(codigo, self.fuente_code, self.config.TAMANO_FUENTE_CODIGO)
         tamano_actual = self.config.TAMANO_FUENTE_CODIGO
         
         if ancho_texto_puro > ancho_util_texto:
             factor = ancho_util_texto / ancho_texto_puro
             tamano_actual = tamano_actual * factor
-            c.setFont(self.fuente_light, tamano_actual)
+            c.setFont(self.fuente_code, tamano_actual)
         
         # justificacion expandida - letras espaciadas uniformemente
         num_caracteres = len(codigo)
@@ -260,7 +303,7 @@ class GeneradorEtiquetas:
         ancho_solo_letras = 0
         anchos_individuales = []
         for letra in codigo:
-            w = c.stringWidth(letra, self.fuente_light, tamano_actual)
+            w = c.stringWidth(letra, self.fuente_code, tamano_actual)
             anchos_individuales.append(w)
             ancho_solo_letras += w
         
@@ -302,12 +345,40 @@ class GeneradorEtiquetas:
         y_base_bloque = y + (self.config.ALTO_CUADRO - altura_total_visual) / 2
         y_base_bloque += self.config.AJUSTE_VERTICAL_CODIGO  # ajuste fino
         
-        # dibujar codigo de barras visual
+        # posiciones verticales calculadas
         y_barras = y_base_bloque + espacio_texto_total + 0.03 * cm
+        y_texto = y_barras - self.config.SEPARACION_TEXTO_BARRAS
+        y_imagenes = y_barras + self.config.DISTANCIA_Y_DESDE_CODIGO
+        
+        # --- DIBUJO DE IMAGENES ---
+        
+        # 1. dibujar logo unasam - izquierda
+        x_logo_unasam = x + self.config.MARGEN_X_LOGO_UNASAM
+        self._dibujar_imagen(c, self.config.RUTA_LOGO_UNASAM, x_logo_unasam, y_imagenes, self.config.ALTO_IMAGENES)
+        
+        # 2. dibujar logo facultad - derecha
+        # primero obtenemos el ancho real que tendra la imagen
+        ancho_img_facultad = 0
+        if os.path.exists(self.config.RUTA_LOGO_FACULTAD):
+            try:
+                img_fac = ImageReader(self.config.RUTA_LOGO_FACULTAD)
+                w_f, h_f = img_fac.getSize()
+                aspect_f = w_f / h_f
+                ancho_img_facultad = self.config.ALTO_IMAGENES * aspect_f
+            except:
+                ancho_img_facultad = 0 # fallo lectura
+        
+        if ancho_img_facultad > 0:
+            # calculo de x derecha - ancho cuadro - margen derecho - ancho imagen
+            x_logo_facultad = (x + self.config.ANCHO_CUADRO) - self.config.MARGEN_X_LOGO_FACULTAD - ancho_img_facultad
+            self._dibujar_imagen(c, self.config.RUTA_LOGO_FACULTAD, x_logo_facultad, y_imagenes, self.config.ALTO_IMAGENES)
+        
+        # --- DIBUJO DE CODIGOS ---
+        
+        # dibujar codigo de barras visual
         self._dibujar_codigo_barras(c, x, y_barras, codigo)
         
         # dibujar codigo textual
-        y_texto = y_barras - self.config.SEPARACION_TEXTO_BARRAS
         self._dibujar_texto_codigo(c, x, y_texto, codigo)
     
     # *************************************** calculo de posiciones ***************************************
