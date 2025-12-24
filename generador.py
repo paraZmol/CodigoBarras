@@ -16,13 +16,13 @@ class Config:
     
     # archivo excel
     NOMBRE_EXCEL = "LIBROS FIIA.xlsx"
-    FILA_INICIAL = 35
-    FILA_FINAL = 101
+    FILA_INICIAL = 300
+    FILA_FINAL = 370
     COLUMNA_CODIGOS = "L"        # codigo de barras
     COLUMNA_ESTANTERIA = "K"     # ubicacion en la estanteria
     
-    # para el nombre de archivo
-    NUMERO_ARCHIVO = "1"
+    # para el nombre de archivo (este valor sera ignorado por el autoincrementable)
+    # NUMERO_ARCHIVO = "5" 
     ABREVIACION_FACULTAD = "FIIA"
     
     # fuentes
@@ -154,6 +154,9 @@ class GeneradorEtiquetas:
         self.fuente_bold = None
         self.fuente_code = None
         self._cargar_fuentes()
+        
+        # logica de autoincremento al iniciar
+        self.numero_archivo_auto = self._calcular_siguiente_numero()
     
     # inicializacion 
     
@@ -175,12 +178,47 @@ class GeneradorEtiquetas:
         else:
             print(f"aviso - no se encontro '{self.config.RUTA_FUENTE_CODE}', usando fuente principal")
             self.fuente_code = self.fuente_bold
+
+    def _calcular_siguiente_numero(self):
+        """
+        busca el siguiente numero de archivo basado en lo que existe en la carpeta
+        logica: busca archivos que empiecen con numero y sigan con la facultad
+        ejemplo: '5FIIA...' -> detecta 5
+        """
+        facultad = self.config.ABREVIACION_FACULTAD
+        archivos = [f for f in os.listdir('.') if f.endswith('.pdf')]
+        
+        max_numero = 0
+        
+        print(f"buscando archivos anteriores de {facultad}...")
+        
+        for archivo in archivos:
+            # verificar si contiene la abreviacion de facultad
+            if facultad in archivo:
+                # dividir el nombre en la primera aparicion de la facultad
+                # ej: "5FIIA 500-600.pdf" -> ["5", " 500-600.pdf"]
+                partes = archivo.split(facultad, 1)
+                
+                if len(partes) > 1:
+                    prefijo = partes[0]
+                    
+                    # verificar estrictamente si es un numero entero lo que esta antes
+                    if prefijo.isdigit():
+                        numero = int(prefijo)
+                        if numero > max_numero:
+                            max_numero = numero
+        
+        siguiente = max_numero + 1
+        print(f"ultimo encontrado: {max_numero if max_numero > 0 else 'ninguno'} -> generando archivo numero: {siguiente}")
+        return str(siguiente)
     
     def _obtener_nombre_archivo(self):
-        """genera el nombre del archivo pdf de salida"""
+        """genera el nombre del archivo pdf usando el numero calculado"""
         rango_inicial_limpio = self.rango_inicial.replace('*', '').replace('/', '-').replace('\\', '-').replace(':', '-')
         rango_final_limpio = self.rango_final.replace('*', '').replace('/', '-').replace('\\', '-').replace(':', '-')
-        return f"{self.config.NUMERO_ARCHIVO}{self.config.ABREVIACION_FACULTAD} {rango_inicial_limpio} - {rango_final_limpio}.pdf"
+        
+        # usa self.numero_archivo_auto
+        return f"{self.numero_archivo_auto}{self.config.ABREVIACION_FACULTAD} {rango_inicial_limpio} - {rango_final_limpio}.pdf"
     
     # **************************** dibujo de titulos ****************************
     
