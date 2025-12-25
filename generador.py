@@ -16,13 +16,10 @@ class Config:
     
     # archivo excel
     NOMBRE_EXCEL = "LIBROS FIIA.xlsx"
-    FILA_INICIAL = 300
-    FILA_FINAL = 370
+    FILA_INICIAL = 35  # configuracion de fila inicial
     COLUMNA_CODIGOS = "L"        # codigo de barras
     COLUMNA_ESTANTERIA = "K"     # ubicacion en la estanteria
     
-    # para el nombre de archivo (este valor sera ignorado por el autoincrementable)
-    # NUMERO_ARCHIVO = "5" 
     ABREVIACION_FACULTAD = "FIIA"
     
     # fuentes
@@ -108,10 +105,29 @@ class LectorExcel:
             print(f"error al cargar excel - {e}")
             return False
     
-    def leer_codigos(self):
-        """lee los codigos de barras del rango especificado"""
+    def obtener_ultima_fila(self):
+        """obtiene la ultima fila con datos en la columna de estanteria"""
+        ultima_fila = self.sheet.max_row
+        
+        # buscar la ultima fila que tenga datos en columna estanteria
+        for fila in range(ultima_fila, 0, -1):
+            celda = f"{self.config.COLUMNA_ESTANTERIA}{fila}"
+            valor = self.sheet[celda].value
+            if valor is not None and str(valor).strip() != "":
+                return fila
+        
+        return self.config.FILA_INICIAL
+    
+    def leer_valor_estanteria(self, fila):
+        """lee el valor de estanteria de una fila especifica"""
+        celda = f"{self.config.COLUMNA_ESTANTERIA}{fila}"
+        valor = self.sheet[celda].value
+        return str(valor).strip() if valor else ""
+    
+    def leer_codigos_rango(self, fila_inicio, fila_fin):
+        """lee los codigos de barras de un rango especifico"""
         codigos = []
-        for fila in range(self.config.FILA_INICIAL, self.config.FILA_FINAL + 1):
+        for fila in range(fila_inicio, fila_fin + 1):
             celda = f"{self.config.COLUMNA_CODIGOS}{fila}"
             valor = self.sheet[celda].value
             
@@ -120,21 +136,7 @@ class LectorExcel:
             else:
                 codigos.append(str(valor).strip())
         
-        print(f"codigos leidos - {len(codigos)}")
         return codigos
-    
-    def leer_rangos(self):
-        """lee el rango inicial y final de estanteria"""
-        celda_inicial = f"{self.config.COLUMNA_ESTANTERIA}{self.config.FILA_INICIAL}"
-        celda_final = f"{self.config.COLUMNA_ESTANTERIA}{self.config.FILA_FINAL}"
-        
-        rango_inicial = self.sheet[celda_inicial].value
-        rango_final = self.sheet[celda_final].value
-        
-        rango_inicial = str(rango_inicial).strip() if rango_inicial else ""
-        rango_final = str(rango_final).strip() if rango_final else ""
-        
-        return rango_inicial, rango_final
     
     def cerrar(self):
         """cierra el archivo excel"""
@@ -142,27 +144,152 @@ class LectorExcel:
             self.workbook.close()
 
 
+# ********************************************** procesador de lotes **********************************************
+
+class ProcesadorLotes:
+    """maneja la logica de division automatica en lotes de 72 filas"""
+    
+    def __init__(self, lector, config):
+        self.lector = lector
+        self.config = config
+        self.ultima_fila_excel = lector.obtener_ultima_fila()
+    
+    def calcular_lotes(self):
+        """calcula todos los lotes que se deben generar"""
+        lotes = []
+        fila_actual = self.config.FILA_INICIAL
+        
+        print(f"\n{'=' * 60}")
+        print(f"calculando lotes desde fila {fila_actual} hasta {self.ultima_fila_excel}")
+        print(f"{'=' * 60}\n")
+        
+        while fila_actual <= self.ultima_fila_excel:
+            lote = self._calcular_lote_individual(fila_actual)
+            
+            if lote:
+                lotes.append(lote)
+                print(f"lote {len(lotes)}: filas {lote['fila_inicio']}-{lote['fila_fin']} "
+                      f"({lote['total_filas']} filas) - rango [{lote['rango_inicial']} - {lote['rango_final']}]")
+                fila_actual = lote['fila_fin'] + 1
+            else:
+                break
+        
+        print(f"\n{'=' * 60}")
+        print(f"total de lotes calculados: {len(lotes)}")
+        print(f"{'=' * 60}\n")
+        
+        return lotes
+    
+    def _calcular_lote_individual(self, fila_inicio):
+        """calcula un lote individual desde una fila inicial"""
+        # verificar que no excedamos el excel
+        if fila_inicio > self.ultima_fila_excel:
+            return None
+        
+        # caso especial - quedan menos de 72 filas
+        filas_restantes = self.ultima_fila_excel - fila_inicio + 1
+        if filas_restantes <= 72:
+            return {
+                'fila_inicio': fila_inicio,
+                'fila_fin': self.ultima_fila_excel,
+                'total_filas': filas_restantes,
+                'rango_inicial': self.lector.leer_valor_estanteria(fila_inicio),
+                'rango_final': self.lector.leer_valor_estanteria(self.ultima_fila_excel)
+            }
+        
+        # tomar 72 filas tentativamente
+        fila_fin_tentativa = fila_inicio + 71
+        
+        # verificar continuidad
+        valor_72 = self.lector.leer_valor_estanteria(fila_fin_tentativa)
+        valor_73 = self.lector.leer_valor_estanteria(fila_fin_tentativa + 1)
+        
+        # **** caso 1 - no hay continuidad - lote normal de 72
+        if valor_72 != valor_73:
+            return {
+                'fila_inicio': fila_inicio,
+                'fila_fin': fila_fin_tentativa,
+                'total_filas': 72,
+                'rango_inicial': self.lector.leer_valor_estanteria(fila_inicio),
+                'rango_final': valor_72
+            }
+        
+        # **** caso 2 - hay continuidad - buscar inicio y fin del grupo
+        inicio_grupo = self._encontrar_inicio_grupo(fila_fin_tentativa, valor_72)
+        fin_grupo = self._encontrar_fin_grupo(fila_fin_tentativa + 1, valor_72)
+        
+        total_filas_grupo = fin_grupo - inicio_grupo + 1
+        
+        # **** caso 2a: mega-grupo - mas de 72 filas
+        if total_filas_grupo > 72:
+            # verificar si hay filas antes del mega-grupo
+            if inicio_grupo > fila_inicio:
+                # generar lote con filas antes del mega-grupo
+                return {
+                    'fila_inicio': fila_inicio,
+                    'fila_fin': inicio_grupo - 1,
+                    'total_filas': inicio_grupo - fila_inicio,
+                    'rango_inicial': self.lector.leer_valor_estanteria(fila_inicio),
+                    'rango_final': self.lector.leer_valor_estanteria(inicio_grupo - 1)
+                }
+            else:
+                # *** todo el lote es el mega-grupo
+                return {
+                    'fila_inicio': inicio_grupo,
+                    'fila_fin': fin_grupo,
+                    'total_filas': total_filas_grupo,
+                    'rango_inicial': valor_72,
+                    'rango_final': valor_72,
+                    'es_mega_grupo': True
+                }
+        
+        # **** caso 2b: grupo normal con desbordamiento - menos de 72 filas
+        # excluir el grupo del lote actual
+        return {
+            'fila_inicio': fila_inicio,
+            'fila_fin': inicio_grupo - 1,
+            'total_filas': inicio_grupo - fila_inicio,
+            'rango_inicial': self.lector.leer_valor_estanteria(fila_inicio),
+            'rango_final': self.lector.leer_valor_estanteria(inicio_grupo - 1)
+        }
+    
+    def _encontrar_inicio_grupo(self, fila_desde, valor_buscado):
+        """retrocede para encontrar donde empieza el grupo con el mismo valor"""
+        fila = fila_desde
+        while fila >= self.config.FILA_INICIAL:
+            valor_actual = self.lector.leer_valor_estanteria(fila)
+            if valor_actual != valor_buscado:
+                return fila + 1
+            fila -= 1
+        return self.config.FILA_INICIAL
+    
+    def _encontrar_fin_grupo(self, fila_desde, valor_buscado):
+        """avanza para encontrar donde termina el grupo con el mismo valor"""
+        fila = fila_desde
+        while fila <= self.ultima_fila_excel:
+            valor_actual = self.lector.leer_valor_estanteria(fila)
+            if valor_actual != valor_buscado:
+                return fila - 1
+            fila += 1
+        return self.ultima_fila_excel
+
+
 # ********************************************** generacion del pdf **********************************************
 
 class GeneradorEtiquetas:
     """genera el pdf con las etiquetas de codigos de barras"""
     
-    def __init__(self, config, rango_inicial, rango_final):
+    def __init__(self, config):
         self.config = config
-        self.rango_inicial = rango_inicial
-        self.rango_final = rango_final
         self.fuente_bold = None
         self.fuente_code = None
         self._cargar_fuentes()
-        
-        # logica de autoincremento al iniciar
-        self.numero_archivo_auto = self._calcular_siguiente_numero()
     
     # inicializacion 
     
     def _cargar_fuentes(self):
         """carga las fuentes personalizadas o usa alternativas"""
-        # fuente bold (titulos)
+        # fuente bold - titulos
         if os.path.exists(self.config.RUTA_FUENTE):
             pdfmetrics.registerFont(TTFont('OpenSans-Bold', self.config.RUTA_FUENTE))
             self.fuente_bold = "OpenSans-Bold"
@@ -170,9 +297,8 @@ class GeneradorEtiquetas:
             print(f"aviso - no se encontro '{self.config.RUTA_FUENTE}', usando helvetica-bold")
             self.fuente_bold = "Helvetica-Bold"
         
-        # fuente code (texto del codigo)
+        # fuente code - texto del codigo
         if os.path.exists(self.config.RUTA_FUENTE_CODE):
-            # registramos con un nombre interno claro 'OpenSans-Code'
             pdfmetrics.registerFont(TTFont('OpenSans-Code', self.config.RUTA_FUENTE_CODE))
             self.fuente_code = "OpenSans-Code"
         else:
@@ -180,49 +306,37 @@ class GeneradorEtiquetas:
             self.fuente_code = self.fuente_bold
 
     def _calcular_siguiente_numero(self):
-        """
-        busca el siguiente numero de archivo basado en lo que existe en la carpeta
-        logica: busca archivos que empiecen con numero y sigan con la facultad
-        ejemplo: '5FIIA...' -> detecta 5
-        """
+        """busca el siguiente numero de archivo basado en lo que existe en la carpeta"""
         facultad = self.config.ABREVIACION_FACULTAD
         archivos = [f for f in os.listdir('.') if f.endswith('.pdf')]
         
         max_numero = 0
         
-        print(f"buscando archivos anteriores de {facultad}...")
-        
         for archivo in archivos:
-            # verificar si contiene la abreviacion de facultad
             if facultad in archivo:
-                # dividir el nombre en la primera aparicion de la facultad
-                # ej: "5FIIA 500-600.pdf" -> ["5", " 500-600.pdf"]
                 partes = archivo.split(facultad, 1)
                 
                 if len(partes) > 1:
                     prefijo = partes[0]
                     
-                    # verificar estrictamente si es un numero entero lo que esta antes
                     if prefijo.isdigit():
                         numero = int(prefijo)
                         if numero > max_numero:
                             max_numero = numero
         
         siguiente = max_numero + 1
-        print(f"ultimo encontrado: {max_numero if max_numero > 0 else 'ninguno'} -> generando archivo numero: {siguiente}")
         return str(siguiente)
     
-    def _obtener_nombre_archivo(self):
-        """genera el nombre del archivo pdf usando el numero calculado"""
-        rango_inicial_limpio = self.rango_inicial.replace('*', '').replace('/', '-').replace('\\', '-').replace(':', '-')
-        rango_final_limpio = self.rango_final.replace('*', '').replace('/', '-').replace('\\', '-').replace(':', '-')
+    def _obtener_nombre_archivo(self, numero_archivo, rango_inicial, rango_final):
+        """genera el nombre del archivo pdf"""
+        rango_inicial_limpio = rango_inicial.replace('*', '').replace('/', '-').replace('\\', '-').replace(':', '-')
+        rango_final_limpio = rango_final.replace('*', '').replace('/', '-').replace('\\', '-').replace(':', '-')
         
-        # usa self.numero_archivo_auto
-        return f"{self.numero_archivo_auto}{self.config.ABREVIACION_FACULTAD} {rango_inicial_limpio} - {rango_final_limpio}.pdf"
+        return f"{numero_archivo}{self.config.ABREVIACION_FACULTAD} {rango_inicial_limpio} - {rango_final_limpio}.pdf"
     
     # **************************** dibujo de titulos ****************************
     
-    def _dibujar_titulo_principal(self, c, ancho_hoja, alto_hoja):
+    def _dibujar_titulo_principal(self, c, ancho_hoja, alto_hoja, rango_inicial, rango_final):
         """dibuja el titulo principal en la parte superior de la pagina"""
         pos_x = 5.52 * cm
         ancho = 9.97 * cm
@@ -246,7 +360,7 @@ class GeneradorEtiquetas:
         c.drawCentredString(
             centro_x, 
             y_linea2, 
-            f"{self.rango_inicial} - {self.rango_final}"
+            f"{rango_inicial} - {rango_final}"
         )
     
     # **************************** dibujo de elementos - imagenes ****************************
@@ -254,25 +368,15 @@ class GeneradorEtiquetas:
     def _dibujar_imagen(self, c, ruta_imagen, x, y, alto_deseado):
         """dibuja una imagen redimensionada proporcionalmente"""
         if not os.path.exists(ruta_imagen):
-            print(f"aviso - imagen no encontrada '{ruta_imagen}'")
             return 0
 
         try:
-            # obtener dimensiones reales
             img_utils = ImageReader(ruta_imagen)
             ancho_real, alto_real = img_utils.getSize()
-            
-            # calcular aspecto - ancho / alto
             aspect_ratio = ancho_real / alto_real
-            
-            # calcular nuevo ancho basado en el alto deseado
             nuevo_ancho = alto_deseado * aspect_ratio
-            
-            # dibujar imagen - reportlab dibuja desde esquina inferior izquierda
             c.drawImage(ruta_imagen, x, y, width=nuevo_ancho, height=alto_deseado, mask='auto')
-            
             return nuevo_ancho
-            
         except Exception as e:
             print(f"error al dibujar imagen {ruta_imagen} - {e}")
             return 0
@@ -284,7 +388,6 @@ class GeneradorEtiquetas:
         codigo_limpio = codigo.replace("*", "")
         ancho_maximo = self.config.ANCHO_CUADRO - (2 * self.config.MARGEN_HORIZONTAL_BARRAS)
         
-        # crear codigo de barras
         barcode = code39.Standard39(
             codigo_limpio,
             barHeight=self.config.ALTO_BARRAS,
@@ -293,7 +396,6 @@ class GeneradorEtiquetas:
             humanReadable=False
         )
         
-        # reducir si excede el ancho maximo
         if barcode.width > ancho_maximo:
             factor_reduccion = ancho_maximo / barcode.width
             nuevo_ancho_barra = self.config.ANCHO_BARRAS * factor_reduccion
@@ -305,7 +407,6 @@ class GeneradorEtiquetas:
                 humanReadable=False
             )
         
-        # centrar horizontalmente en el cuadro
         centro_x_cuadro = x_cuadro + (self.config.ANCHO_CUADRO / 2)
         x_barcode = centro_x_cuadro - (barcode.width / 2)
         
@@ -314,14 +415,12 @@ class GeneradorEtiquetas:
     
     def _dibujar_texto_codigo(self, c, x_cuadro, y_base, codigo):
         """dibuja el codigo en formato textual con justificacion expandida"""
-        # zona de texto disponible
         margen = self.config.MARGEN_HORIZONTAL_TEXTO 
         ancho_util_texto = self.config.ANCHO_CUADRO - (2 * margen)
         x_inicio_texto = x_cuadro + margen
         
         c.setFont(self.fuente_code, self.config.TAMANO_FUENTE_CODIGO)
         
-        # ajuste automatico del tamano de fuente si es necesario
         ancho_texto_puro = c.stringWidth(codigo, self.fuente_code, self.config.TAMANO_FUENTE_CODIGO)
         tamano_actual = self.config.TAMANO_FUENTE_CODIGO
         
@@ -330,14 +429,12 @@ class GeneradorEtiquetas:
             tamano_actual = tamano_actual * factor
             c.setFont(self.fuente_code, tamano_actual)
         
-        # justificacion expandida - letras espaciadas uniformemente
         num_caracteres = len(codigo)
         
         if num_caracteres <= 1:
             c.drawCentredString(x_inicio_texto + (ancho_util_texto / 2), y_base, codigo)
             return
         
-        # calcular anchos individuales de cada letra
         ancho_solo_letras = 0
         anchos_individuales = []
         for letra in codigo:
@@ -345,14 +442,12 @@ class GeneradorEtiquetas:
             anchos_individuales.append(w)
             ancho_solo_letras += w
         
-        # calcular espacio entre letras
         espacio_sobrante = ancho_util_texto - ancho_solo_letras
         if espacio_sobrante < 0:
             espacio_sobrante = 0
         
         gap = espacio_sobrante / (num_caracteres - 1)
         
-        # dibujar cada letra con el espaciado calculado
         x_cursor = x_inicio_texto
         for i, letra in enumerate(codigo):
             c.drawString(x_cursor, y_base, letra)
@@ -362,7 +457,6 @@ class GeneradorEtiquetas:
     
     def _dibujar_cuadro(self, c, x, y, codigo):
         """dibuja un cuadro individual con titulo, codigo de barras y texto"""
-        # borde del cuadro
         c.setLineWidth(1)
         c.setStrokeColorRGB(0, 0, 0)
         c.setFillColorRGB(0, 0, 0)
@@ -370,32 +464,24 @@ class GeneradorEtiquetas:
         
         centro_x = x + (self.config.ANCHO_CUADRO / 2)
         
-        # titulo interno del cuadro
         c.setFont(self.fuente_bold, self.config.TAMANO_FUENTE_CUADRO)
         alto_titulo = 0.4 * cm
         y_titulo = y + self.config.ALTO_CUADRO - alto_titulo - 0.2 * cm
         c.drawCentredString(centro_x, y_titulo, self.config.TITULO_CUADRO)
         
-        # calculos para el bloque de codigo - barras + texto
         altura_total_visual = 1.34 * cm
         espacio_texto_total = altura_total_visual - self.config.ALTO_BARRAS
         
         y_base_bloque = y + (self.config.ALTO_CUADRO - altura_total_visual) / 2
-        y_base_bloque += self.config.AJUSTE_VERTICAL_CODIGO  # ajuste fino
+        y_base_bloque += self.config.AJUSTE_VERTICAL_CODIGO
         
-        # posiciones verticales calculadas
         y_barras = y_base_bloque + espacio_texto_total + 0.03 * cm
         y_texto = y_barras - self.config.SEPARACION_TEXTO_BARRAS
         y_imagenes = y_barras + self.config.DISTANCIA_Y_DESDE_CODIGO
         
-        # --- DIBUJO DE IMAGENES ---
-        
-        # 1. dibujar logo unasam - izquierda
         x_logo_unasam = x + self.config.MARGEN_X_LOGO_UNASAM
         self._dibujar_imagen(c, self.config.RUTA_LOGO_UNASAM, x_logo_unasam, y_imagenes, self.config.ALTO_IMAGENES)
         
-        # 2. dibujar logo facultad - derecha
-        # primero obtenemos el ancho real que tendra la imagen
         ancho_img_facultad = 0
         if os.path.exists(self.config.RUTA_LOGO_FACULTAD):
             try:
@@ -404,19 +490,13 @@ class GeneradorEtiquetas:
                 aspect_f = w_f / h_f
                 ancho_img_facultad = self.config.ALTO_IMAGENES * aspect_f
             except:
-                ancho_img_facultad = 0 # fallo lectura
+                ancho_img_facultad = 0
         
         if ancho_img_facultad > 0:
-            # calculo de x derecha - ancho cuadro - margen derecho - ancho imagen
             x_logo_facultad = (x + self.config.ANCHO_CUADRO) - self.config.MARGEN_X_LOGO_FACULTAD - ancho_img_facultad
             self._dibujar_imagen(c, self.config.RUTA_LOGO_FACULTAD, x_logo_facultad, y_imagenes, self.config.ALTO_IMAGENES)
         
-        # --- DIBUJO DE CODIGOS ---
-        
-        # dibujar codigo de barras visual
         self._dibujar_codigo_barras(c, x, y_barras, codigo)
-        
-        # dibujar codigo textual
         self._dibujar_texto_codigo(c, x, y_texto, codigo)
     
     # *************************************** calculo de posiciones ***************************************
@@ -446,16 +526,13 @@ class GeneradorEtiquetas:
     
     # ******************************** composicion de pagina ********************************
     
-    def _dibujar_pagina(self, c, codigos_pagina, ancho_hoja, alto_hoja):
+    def _dibujar_pagina(self, c, codigos_pagina, ancho_hoja, alto_hoja, rango_inicial, rango_final):
         """dibuja una pagina completa con titulo y grid de etiquetas"""
-        # titulo principal
-        self._dibujar_titulo_principal(c, ancho_hoja, alto_hoja)
+        self._dibujar_titulo_principal(c, ancho_hoja, alto_hoja, rango_inicial, rango_final)
         
-        # calcular posiciones del grid
         posiciones_x = self._calcular_posiciones_x()
         posiciones_y = self._calcular_posiciones_y(alto_hoja)
         
-        # dibujar cada cuadro en el grid
         indice = 0
         for y in posiciones_y:
             for x in posiciones_x:
@@ -469,36 +546,34 @@ class GeneradorEtiquetas:
     
     # **************************** generacion principal ****************************
     
-    def generar_pdf(self, codigos):
-        """genera el archivo pdf completo con todas las etiquetas"""
-        nombre_archivo = self._obtener_nombre_archivo()
+    def generar_pdf_lote(self, lote, codigos, numero_archivo):
+        """genera un archivo pdf para un lote especifico"""
+        nombre_archivo = self._obtener_nombre_archivo(numero_archivo, lote['rango_inicial'], lote['rango_final'])
         c = canvas.Canvas(nombre_archivo, pagesize=A4)
         ancho_hoja, alto_hoja = A4
         
         total_codigos = len(codigos)
         total_paginas = (total_codigos + self.config.CUADROS_POR_HOJA - 1) // self.config.CUADROS_POR_HOJA
         
-        print(f"\n{'=' * 50}")
-        print(f"generando {total_paginas} pagina-s-...")
-        print(f"{'=' * 50}\n")
+        print(f"\ngenerando: {nombre_archivo}")
+        print(f"  filas: {lote['fila_inicio']}-{lote['fila_fin']} ({lote['total_filas']} etiquetas)")
+        print(f"  paginas: {total_paginas}")
         
-        # generar cada pagina
         for num_pagina in range(total_paginas):
             inicio = num_pagina * self.config.CUADROS_POR_HOJA
             fin = min(inicio + self.config.CUADROS_POR_HOJA, total_codigos)
             codigos_pagina = codigos[inicio:fin]
-            self._dibujar_pagina(c, codigos_pagina, ancho_hoja, alto_hoja)
+            self._dibujar_pagina(c, codigos_pagina, ancho_hoja, alto_hoja, lote['rango_inicial'], lote['rango_final'])
             c.showPage()
         
         c.save()
-        print(f"\ngenerado correctamente - {nombre_archivo}")
-        print(f"total de etiquetas - {total_codigos}")
+        print(f"  ✓ generado correctamente")
 
 
 # ************************************* ejecucion principal *************************************
 
 def main():
-    """funcion principal que ejecuta todo el proceso"""
+    """funcion principal que ejecuta todo el proceso automatizado"""
     config = Config()
     lector = LectorExcel(config)
     
@@ -506,19 +581,35 @@ def main():
     if not lector.cargar_excel(): 
         return
     
-    # leer datos
-    codigos = lector.leer_codigos()
-    rango_inicial, rango_final = lector.leer_rangos()
-    lector.cerrar()
+    # calcular lotes automaticamente
+    procesador = ProcesadorLotes(lector, config)
+    lotes = procesador.calcular_lotes()
     
-    # validar que haya codigos
-    if not codigos:
-        print("error - no hay codigos")
+    if not lotes:
+        print("error - no se calcularon lotes")
+        lector.cerrar()
         return
     
-    # generar pdf
-    generador = GeneradorEtiquetas(config, rango_inicial, rango_final)
-    generador.generar_pdf(codigos)
+    # generar pdfs para cada lote
+    generador = GeneradorEtiquetas(config)
+    numero_inicial = int(generador._calcular_siguiente_numero())
+    
+    print(f"\n{'=' * 60}")
+    print(f"iniciando generacion de {len(lotes)} archivo(s) PDF")
+    print(f"numero inicial: {numero_inicial}")
+    print(f"{'=' * 60}")
+    
+    for i, lote in enumerate(lotes):
+        numero_archivo = str(numero_inicial + i)
+        codigos = lector.leer_codigos_rango(lote['fila_inicio'], lote['fila_fin'])
+        generador.generar_pdf_lote(lote, codigos, numero_archivo)
+    
+    lector.cerrar()
+    
+    print(f"\n{'=' * 60}")
+    print(f"✓ proceso completado exitosamente")
+    print(f"  archivos generados: {len(lotes)}")
+    print(f"{'=' * 60}\n")
 
 
 if __name__ == "__main__":
