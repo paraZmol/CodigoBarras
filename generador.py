@@ -16,18 +16,18 @@ class Config:
     """configuracion centralizada del generador de etiquetas"""
     # *************************************** CAMBIAR
     # archivo excel 
-    NOMBRE_EXCEL = "LIBROS FC.xlsx" # nombre del excel de entrada
-    NOMBRE_EXCEL_SALIDA = "LIBROS FC_PINTADO.xlsx" # nombre del excel de salida - coloreado
+    NOMBRE_EXCEL = "LIBROS FIIA.xlsx" # nombre del excel de entrada
+    NOMBRE_EXCEL_SALIDA = "LIBROS FIIA_PINTADO.xlsx" # nombre del excel de salida - coloreado
     
     FILA_INICIAL = 53  # configuracion de fila inicial - desde donde comenzara a generar el codigo en el excel
     COLUMNA_CODIGOS = "A"        # columna del codigo de barras en el excel
     COLUMNA_ESTANTERIA = "N"     # columna de la ubicacion en la estanteria en el excel
     
-    ABREVIACION_FACULTAD = "FC" # sigla facultad
+    ABREVIACION_FACULTAD = "FIIA" # sigla facultad
     
     # configuracion de imagenes - logos
     RUTA_LOGO_UNASAM = "logo-unasam.png" #logo de la unasam
-    RUTA_LOGO_FACULTAD = "facultad.jpg" # logo de la facultad del que se generara
+    RUTA_LOGO_FACULTAD = "facultad.png" # logo de la facultad del que se generara
     
     # ************************************** FIN CAMBIO
     
