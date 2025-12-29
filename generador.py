@@ -6,6 +6,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.graphics.barcode import code39
 from reportlab.lib.utils import ImageReader
 import openpyxl
+from openpyxl.styles import PatternFill  # Importamos herramienta de pintura
 import os
 
 
@@ -15,12 +16,14 @@ class Config:
     """configuracion centralizada del generador de etiquetas"""
     
     # archivo excel
-    NOMBRE_EXCEL = "LIBROS FIIA.xlsx"
-    FILA_INICIAL = 35  # configuracion de fila inicial
-    COLUMNA_CODIGOS = "L"        # codigo de barras
-    COLUMNA_ESTANTERIA = "K"     # ubicacion en la estanteria
+    NOMBRE_EXCEL = "LIBROS FIMGM.xlsx"
+    NOMBRE_EXCEL_SALIDA = "LIBROS FIMGM_PINTADO.xlsx" # nombre del archivo coloreado
     
-    ABREVIACION_FACULTAD = "FIIA"
+    FILA_INICIAL = 3  # configuracion de fila inicial
+    COLUMNA_CODIGOS = "A"        # codigo de barras
+    COLUMNA_ESTANTERIA = "N"     # ubicacion en la estanteria
+    
+    ABREVIACION_FACULTAD = "FIMGM"
     
     # fuentes
     RUTA_FUENTE = "OpenSans-Bold.ttf"
@@ -28,7 +31,7 @@ class Config:
     
     # configuracion de imagenes - logos
     RUTA_LOGO_UNASAM = "logo-unasam.png"
-    RUTA_LOGO_FACULTAD = "facultad.png"
+    RUTA_LOGO_FACULTAD = "facultad.jpg"
     
     # dimensiones y ubicacion de imagenes
     ALTO_IMAGENES = 0.7 * cm
@@ -91,12 +94,13 @@ class LectorExcel:
     def cargar_excel(self):
         """carga el archivo excel y retorna true si fue exitoso"""
         try:
+            # data_only=True obtiene los valores calculados, no las formulas
             self.workbook = openpyxl.load_workbook(
                 self.config.NOMBRE_EXCEL, 
                 data_only=True
             )
             self.sheet = self.workbook.active
-            print(f"excel cargado - {self.config.NOMBRE_EXCEL}")
+            print(f"excel cargado (lectura) - {self.config.NOMBRE_EXCEL}")
             return True
         except FileNotFoundError:
             print(f"error - no se encontro '{self.config.NOMBRE_EXCEL}'")
@@ -142,6 +146,57 @@ class LectorExcel:
         """cierra el archivo excel"""
         if self.workbook:
             self.workbook.close()
+
+
+# ********************************************** pintor de excel **********************************************
+
+class PintorExcel:
+    """maneja el pintado de celdas en el excel"""
+    
+    def __init__(self, config):
+        self.config = config
+        self.workbook = None
+        self.sheet = None
+        # Definimos una paleta de colores suaves (hexadecimal ARGB)
+        self.colores = [
+            PatternFill(start_color="C6E0B4", end_color="C6E0B4", fill_type="solid"), # Verde Claro
+            PatternFill(start_color="BDD7EE", end_color="BDD7EE", fill_type="solid"), # Azul Claro
+            PatternFill(start_color="FFE699", end_color="FFE699", fill_type="solid"), # Amarillo Claro
+            PatternFill(start_color="F8CBAD", end_color="F8CBAD", fill_type="solid"), # Naranja Claro
+        ]
+        
+    def cargar_para_pintar(self):
+        """carga el excel en modo escritura"""
+        try:
+            # Cargamos SIN data_only para intentar preservar el formato original
+            self.workbook = openpyxl.load_workbook(self.config.NOMBRE_EXCEL)
+            self.sheet = self.workbook.active
+            print(f"excel cargado (escritura) - listo para pintar")
+            return True
+        except Exception as e:
+            print(f"error al cargar excel para pintar - {e}")
+            return False
+            
+    def pintar_rango(self, fila_inicio, fila_fin, indice_lote):
+        """pinta las celdas de estanteria para un rango especifico"""
+        # Seleccionar color basado en el indice del lote (rotativo)
+        color_actual = self.colores[indice_lote % len(self.colores)]
+        columna = self.config.COLUMNA_ESTANTERIA
+        
+        for fila in range(fila_inicio, fila_fin + 1):
+            celda = f"{columna}{fila}"
+            self.sheet[celda].fill = color_actual
+            
+    def guardar(self):
+        """guarda el archivo modificado"""
+        try:
+            self.workbook.save(self.config.NOMBRE_EXCEL_SALIDA)
+            print(f"✓ Excel pintado guardado como: {self.config.NOMBRE_EXCEL_SALIDA}")
+            self.workbook.close()
+            return True
+        except Exception as e:
+            print(f"error al guardar excel pintado - {e}")
+            return False
 
 
 # ********************************************** procesador de lotes **********************************************
@@ -575,13 +630,17 @@ class GeneradorEtiquetas:
 def main():
     """funcion principal que ejecuta todo el proceso automatizado"""
     config = Config()
-    lector = LectorExcel(config)
     
-    # cargar excel
+    # 1. Leer el excel para obtener datos
+    lector = LectorExcel(config)
     if not lector.cargar_excel(): 
         return
     
-    # calcular lotes automaticamente
+    # 2. Inicializar el pintor (cargar excel para escribir)
+    pintor = PintorExcel(config)
+    pintor_activo = pintor.cargar_para_pintar()
+    
+    # 3. Calcular lotes
     procesador = ProcesadorLotes(lector, config)
     lotes = procesador.calcular_lotes()
     
@@ -590,25 +649,37 @@ def main():
         lector.cerrar()
         return
     
-    # generar pdfs para cada lote
+    # 4. Generar PDFs y Pintar Excel
     generador = GeneradorEtiquetas(config)
     numero_inicial = int(generador._calcular_siguiente_numero())
     
     print(f"\n{'=' * 60}")
-    print(f"iniciando generacion de {len(lotes)} archivo(s) PDF")
+    print(f"iniciando generacion de {len(lotes)} archivo(s) PDF y pintado de Excel")
     print(f"numero inicial: {numero_inicial}")
     print(f"{'=' * 60}")
     
     for i, lote in enumerate(lotes):
+        # Generar PDF
         numero_archivo = str(numero_inicial + i)
         codigos = lector.leer_codigos_rango(lote['fila_inicio'], lote['fila_fin'])
         generador.generar_pdf_lote(lote, codigos, numero_archivo)
+        
+        # Pintar Excel (si se cargó correctamente)
+        if pintor_activo:
+            pintor.pintar_rango(lote['fila_inicio'], lote['fila_fin'], i)
     
+    # Cerrar lector
     lector.cerrar()
+    
+    # 5. Guardar el Excel pintado
+    if pintor_activo:
+        pintor.guardar()
     
     print(f"\n{'=' * 60}")
     print(f"✓ proceso completado exitosamente")
     print(f"  archivos generados: {len(lotes)}")
+    if pintor_activo:
+        print(f"  excel pintado: {config.NOMBRE_EXCEL_SALIDA}")
     print(f"{'=' * 60}\n")
 
 
