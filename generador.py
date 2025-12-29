@@ -14,24 +14,26 @@ import os
 
 class Config:
     """configuracion centralizada del generador de etiquetas"""
+    # *************************************** CAMBIAR
+    # archivo excel 
+    NOMBRE_EXCEL = "LIBROS FC.xlsx" # nombre del excel de entrada
+    NOMBRE_EXCEL_SALIDA = "LIBROS FC_PINTADO.xlsx" # nombre del excel de salida - coloreado
     
-    # archivo excel
-    NOMBRE_EXCEL = "LIBROS FIMGM.xlsx"
-    NOMBRE_EXCEL_SALIDA = "LIBROS FIMGM_PINTADO.xlsx" # nombre del archivo coloreado
+    FILA_INICIAL = 53  # configuracion de fila inicial - desde donde comenzara a generar el codigo en el excel
+    COLUMNA_CODIGOS = "A"        # columna del codigo de barras en el excel
+    COLUMNA_ESTANTERIA = "N"     # columna de la ubicacion en la estanteria en el excel
     
-    FILA_INICIAL = 3  # configuracion de fila inicial
-    COLUMNA_CODIGOS = "A"        # codigo de barras
-    COLUMNA_ESTANTERIA = "N"     # ubicacion en la estanteria
+    ABREVIACION_FACULTAD = "FC" # sigla facultad
     
-    ABREVIACION_FACULTAD = "FIMGM"
+    # configuracion de imagenes - logos
+    RUTA_LOGO_UNASAM = "logo-unasam.png" #logo de la unasam
+    RUTA_LOGO_FACULTAD = "facultad.jpg" # logo de la facultad del que se generara
+    
+    # ************************************** FIN CAMBIO
     
     # fuentes
     RUTA_FUENTE = "OpenSans-Bold.ttf"
     RUTA_FUENTE_CODE = "OpenSans-Semibold.ttf"
-    
-    # configuracion de imagenes - logos
-    RUTA_LOGO_UNASAM = "logo-unasam.png"
-    RUTA_LOGO_FACULTAD = "facultad.jpg"
     
     # dimensiones y ubicacion de imagenes
     ALTO_IMAGENES = 0.7 * cm
@@ -44,7 +46,7 @@ class Config:
     DISTANCIA_Y_DESDE_CODIGO = -1.3 * cm
     
     # margen de pagina
-    MARGEN_SUPERIOR = 1.1 * cm
+    MARGEN_SUPERIOR = 0.8 * cm  # margen superior par amover el titulo
     MARGEN_IZQUIERDO = 0.4 * cm
     
     # --- grid de etiquetas ---
@@ -54,7 +56,7 @@ class Config:
     
     ESPACIO_HORIZONTAL = 0.15 * cm  # espacio entre columnas
     ESPACIO_VERTICAL = 0.06 * cm    # espacio entre filas
-    Y_INICIAL_GRID = 2.70 * cm
+    Y_INICIAL_GRID = 2.20 * cm
     
     # dimensiones de cuadro individual 
     ANCHO_CUADRO = 6.56 * cm
@@ -157,7 +159,7 @@ class PintorExcel:
         self.config = config
         self.workbook = None
         self.sheet = None
-        # Definimos una paleta de colores suaves (hexadecimal ARGB)
+        # definimos una paleta de colores suaves - hexadecimal ARGB
         self.colores = [
             PatternFill(start_color="C6E0B4", end_color="C6E0B4", fill_type="solid"), # Verde Claro
             PatternFill(start_color="BDD7EE", end_color="BDD7EE", fill_type="solid"), # Azul Claro
@@ -168,7 +170,7 @@ class PintorExcel:
     def cargar_para_pintar(self):
         """carga el excel en modo escritura"""
         try:
-            # Cargamos SIN data_only para intentar preservar el formato original
+            # cargamos SIN data_only para intentar preservar el formato original
             self.workbook = openpyxl.load_workbook(self.config.NOMBRE_EXCEL)
             self.sheet = self.workbook.active
             print(f"excel cargado (escritura) - listo para pintar")
@@ -179,7 +181,7 @@ class PintorExcel:
             
     def pintar_rango(self, fila_inicio, fila_fin, indice_lote):
         """pinta las celdas de estanteria para un rango especifico"""
-        # Seleccionar color basado en el indice del lote (rotativo)
+        # seleccionar color basado en el indice del lote - rotativo
         color_actual = self.colores[indice_lote % len(self.colores)]
         columna = self.config.COLUMNA_ESTANTERIA
         
@@ -636,7 +638,7 @@ def main():
     if not lector.cargar_excel(): 
         return
     
-    # inicializar el pintor (cargar excel para escribir)
+    # inicializar el pintor - cargar excel para escribir
     pintor = PintorExcel(config)
     pintor_activo = pintor.cargar_para_pintar()
     
@@ -649,7 +651,7 @@ def main():
         lector.cerrar()
         return
     
-    # Generar PDFs y Pintar Excel
+    # generar PDFs y pintar excel
     generador = GeneradorEtiquetas(config)
     numero_inicial = int(generador._calcular_siguiente_numero())
     
@@ -664,7 +666,7 @@ def main():
         codigos = lector.leer_codigos_rango(lote['fila_inicio'], lote['fila_fin'])
         generador.generar_pdf_lote(lote, codigos, numero_archivo)
         
-        # pintar Excel - si se cargo correctamente
+        # pintar excel - si se cargo correctamente
         if pintor_activo:
             pintor.pintar_rango(lote['fila_inicio'], lote['fila_fin'], i)
     
