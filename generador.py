@@ -631,16 +631,16 @@ def main():
     """funcion principal que ejecuta todo el proceso automatizado"""
     config = Config()
     
-    # 1. Leer el excel para obtener datos
+    # leer el excel para obtener datos
     lector = LectorExcel(config)
     if not lector.cargar_excel(): 
         return
     
-    # 2. Inicializar el pintor (cargar excel para escribir)
+    # inicializar el pintor (cargar excel para escribir)
     pintor = PintorExcel(config)
     pintor_activo = pintor.cargar_para_pintar()
     
-    # 3. Calcular lotes
+    # calcular lotes
     procesador = ProcesadorLotes(lector, config)
     lotes = procesador.calcular_lotes()
     
@@ -649,7 +649,7 @@ def main():
         lector.cerrar()
         return
     
-    # 4. Generar PDFs y Pintar Excel
+    # Generar PDFs y Pintar Excel
     generador = GeneradorEtiquetas(config)
     numero_inicial = int(generador._calcular_siguiente_numero())
     
@@ -659,19 +659,19 @@ def main():
     print(f"{'=' * 60}")
     
     for i, lote in enumerate(lotes):
-        # Generar PDF
+        # generar PDF
         numero_archivo = str(numero_inicial + i)
         codigos = lector.leer_codigos_rango(lote['fila_inicio'], lote['fila_fin'])
         generador.generar_pdf_lote(lote, codigos, numero_archivo)
         
-        # Pintar Excel (si se cargó correctamente)
+        # pintar Excel - si se cargo correctamente
         if pintor_activo:
             pintor.pintar_rango(lote['fila_inicio'], lote['fila_fin'], i)
     
-    # Cerrar lector
+    # cerrar lector
     lector.cerrar()
     
-    # 5. Guardar el Excel pintado
+    # guardar el excel pintado
     if pintor_activo:
         pintor.guardar()
     
