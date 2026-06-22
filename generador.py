@@ -9,6 +9,7 @@ import openpyxl
 from openpyxl.styles import PatternFill  # Importamos herramienta de pintura
 import os
 
+# hola johan
 
 # ******************************************** zona de configuracion ********************************************
 
@@ -16,18 +17,18 @@ class Config:
     """configuracion centralizada del generador de etiquetas"""
     # *************************************** CAMBIAR
     # archivo excel 
-    NOMBRE_EXCEL = "LIBROS FIIA.xlsx" # nombre del excel de entrada
-    NOMBRE_EXCEL_SALIDA = "LIBROS FIIA_PINTADO.xlsx" # nombre del excel de salida - coloreado
+    NOMBRE_EXCEL = "347.xlsx" # nombre del excel de entrada
+    NOMBRE_EXCEL_SALIDA = "347_Pintado.xlsx" # nombre del excel de salida - coloreado
     
-    FILA_INICIAL = 53  # configuracion de fila inicial - desde donde comenzara a generar el codigo en el excel
+    FILA_INICIAL = 3  # configuracion de fila inicial - desde donde comenzara a generar el codigo en el excel
     COLUMNA_CODIGOS = "A"        # columna del codigo de barras en el excel
-    COLUMNA_ESTANTERIA = "N"     # columna de la ubicacion en la estanteria en el excel
+    # COLUMNA_ESTANTERIA = "N"     # columna de la ubicacion en la estanteria en el excel - COMENTADO: no se requiere estanteria
     
-    ABREVIACION_FACULTAD = "FIIA" # sigla facultad
+    ABREVIACION_FACULTAD = "FDCCPP 347" # sigla facultad
     
     # configuracion de imagenes - logos
     RUTA_LOGO_UNASAM = "logo-unasam.png" #logo de la unasam
-    RUTA_LOGO_FACULTAD = "facultad.png" # logo de la facultad del que se generara
+    RUTA_LOGO_FACULTAD = "facultad.png" # logo de la facultad
     
     # ************************************** FIN CAMBIO
     
@@ -112,23 +113,24 @@ class LectorExcel:
             return False
     
     def obtener_ultima_fila(self):
-        """obtiene la ultima fila con datos en la columna de estanteria"""
+        """obtiene la ultima fila con datos en la columna de codigos"""
         ultima_fila = self.sheet.max_row
         
-        # buscar la ultima fila que tenga datos en columna estanteria
+        # buscar la ultima fila que tenga datos en columna de codigos
         for fila in range(ultima_fila, 0, -1):
-            celda = f"{self.config.COLUMNA_ESTANTERIA}{fila}"
+            celda = f"{self.config.COLUMNA_CODIGOS}{fila}"
             valor = self.sheet[celda].value
             if valor is not None and str(valor).strip() != "":
                 return fila
         
         return self.config.FILA_INICIAL
     
-    def leer_valor_estanteria(self, fila):
-        """lee el valor de estanteria de una fila especifica"""
-        celda = f"{self.config.COLUMNA_ESTANTERIA}{fila}"
-        valor = self.sheet[celda].value
-        return str(valor).strip() if valor else ""
+    # COMENTADO: no se requiere columna de estanteria
+    # def leer_valor_estanteria(self, fila):
+    #     """lee el valor de estanteria de una fila especifica"""
+    #     celda = f"{self.config.COLUMNA_ESTANTERIA}{fila}"
+    #     valor = self.sheet[celda].value
+    #     return str(valor).strip() if valor else ""
     
     def leer_codigos_rango(self, fila_inicio, fila_fin):
         """lee los codigos de barras de un rango especifico"""
@@ -180,10 +182,10 @@ class PintorExcel:
             return False
             
     def pintar_rango(self, fila_inicio, fila_fin, indice_lote):
-        """pinta las celdas de estanteria para un rango especifico"""
+        """pinta las celdas de codigos para un rango especifico"""
         # seleccionar color basado en el indice del lote - rotativo
         color_actual = self.colores[indice_lote % len(self.colores)]
-        columna = self.config.COLUMNA_ESTANTERIA
+        columna = self.config.COLUMNA_CODIGOS  # Pinta la columna de codigos
         
         for fila in range(fila_inicio, fila_fin + 1):
             celda = f"{columna}{fila}"
@@ -226,7 +228,8 @@ class ProcesadorLotes:
             if lote:
                 lotes.append(lote)
                 print(f"lote {len(lotes)}: filas {lote['fila_inicio']}-{lote['fila_fin']} "
-                      f"({lote['total_filas']} filas) - rango [{lote['rango_inicial']} - {lote['rango_final']}]")
+                      f"({lote['total_filas']} filas)")
+                      # COMENTADO: rango de estanteria - f"- rango [{lote['rango_inicial']} - {lote['rango_final']}]"
                 fila_actual = lote['fila_fin'] + 1
             else:
                 break
@@ -250,85 +253,88 @@ class ProcesadorLotes:
                 'fila_inicio': fila_inicio,
                 'fila_fin': self.ultima_fila_excel,
                 'total_filas': filas_restantes,
-                'rango_inicial': self.lector.leer_valor_estanteria(fila_inicio),
-                'rango_final': self.lector.leer_valor_estanteria(self.ultima_fila_excel)
+                # COMENTADO: no se requiere rango de estanteria
+                # 'rango_inicial': self.lector.leer_valor_estanteria(fila_inicio),
+                # 'rango_final': self.lector.leer_valor_estanteria(self.ultima_fila_excel)
             }
         
-        # tomar 72 filas tentativamente
+        # tomar 72 filas tentativamente - SIN verificar continuidad de estanteria
         fila_fin_tentativa = fila_inicio + 71
         
-        # verificar continuidad
-        valor_72 = self.lector.leer_valor_estanteria(fila_fin_tentativa)
-        valor_73 = self.lector.leer_valor_estanteria(fila_fin_tentativa + 1)
+        # COMENTADO: verificacion de continuidad de estanteria
+        # valor_72 = self.lector.leer_valor_estanteria(fila_fin_tentativa)
+        # valor_73 = self.lector.leer_valor_estanteria(fila_fin_tentativa + 1)
         
-        # **** caso 1 - no hay continuidad - lote normal de 72
-        if valor_72 != valor_73:
-            return {
-                'fila_inicio': fila_inicio,
-                'fila_fin': fila_fin_tentativa,
-                'total_filas': 72,
-                'rango_inicial': self.lector.leer_valor_estanteria(fila_inicio),
-                'rango_final': valor_72
-            }
-        
-        # **** caso 2 - hay continuidad - buscar inicio y fin del grupo
-        inicio_grupo = self._encontrar_inicio_grupo(fila_fin_tentativa, valor_72)
-        fin_grupo = self._encontrar_fin_grupo(fila_fin_tentativa + 1, valor_72)
-        
-        total_filas_grupo = fin_grupo - inicio_grupo + 1
-        
-        # **** caso 2a: mega-grupo - mas de 72 filas
-        if total_filas_grupo > 72:
-            # verificar si hay filas antes del mega-grupo
-            if inicio_grupo > fila_inicio:
-                # generar lote con filas antes del mega-grupo
-                return {
-                    'fila_inicio': fila_inicio,
-                    'fila_fin': inicio_grupo - 1,
-                    'total_filas': inicio_grupo - fila_inicio,
-                    'rango_inicial': self.lector.leer_valor_estanteria(fila_inicio),
-                    'rango_final': self.lector.leer_valor_estanteria(inicio_grupo - 1)
-                }
-            else:
-                # *** todo el lote es el mega-grupo
-                return {
-                    'fila_inicio': inicio_grupo,
-                    'fila_fin': fin_grupo,
-                    'total_filas': total_filas_grupo,
-                    'rango_inicial': valor_72,
-                    'rango_final': valor_72,
-                    'es_mega_grupo': True
-                }
-        
-        # **** caso 2b: grupo normal con desbordamiento - menos de 72 filas
-        # excluir el grupo del lote actual
+        # lote normal de 72 filas (sin verificar continuidad)
         return {
             'fila_inicio': fila_inicio,
-            'fila_fin': inicio_grupo - 1,
-            'total_filas': inicio_grupo - fila_inicio,
-            'rango_inicial': self.lector.leer_valor_estanteria(fila_inicio),
-            'rango_final': self.lector.leer_valor_estanteria(inicio_grupo - 1)
+            'fila_fin': fila_fin_tentativa,
+            'total_filas': 72,
+            # COMENTADO: no se requiere rango de estanteria
+            # 'rango_inicial': self.lector.leer_valor_estanteria(fila_inicio),
+            # 'rango_final': valor_72
         }
+        
+        # COMENTADO: toda la lógica de continuidad y grupos de estanteria
+        # # **** caso 2 - hay continuidad - buscar inicio y fin del grupo
+        # inicio_grupo = self._encontrar_inicio_grupo(fila_fin_tentativa, valor_72)
+        # fin_grupo = self._encontrar_fin_grupo(fila_fin_tentativa + 1, valor_72)
+        # 
+        # total_filas_grupo = fin_grupo - inicio_grupo + 1
+        # 
+        # # **** caso 2a: mega-grupo - mas de 72 filas
+        # if total_filas_grupo > 72:
+        #     # verificar si hay filas antes del mega-grupo
+        #     if inicio_grupo > fila_inicio:
+        #         # generar lote con filas antes del mega-grupo
+        #         return {
+        #             'fila_inicio': fila_inicio,
+        #             'fila_fin': inicio_grupo - 1,
+        #             'total_filas': inicio_grupo - fila_inicio,
+        #             'rango_inicial': self.lector.leer_valor_estanteria(fila_inicio),
+        #             'rango_final': self.lector.leer_valor_estanteria(inicio_grupo - 1)
+        #         }
+        #     else:
+        #         # *** todo el lote es el mega-grupo
+        #         return {
+        #             'fila_inicio': inicio_grupo,
+        #             'fila_fin': fin_grupo,
+        #             'total_filas': total_filas_grupo,
+        #             'rango_inicial': valor_72,
+        #             'rango_final': valor_72,
+        #             'es_mega_grupo': True
+        #         }
+        # 
+        # # **** caso 2b: grupo normal con desbordamiento - menos de 72 filas
+        # # excluir el grupo del lote actual
+        # return {
+        #     'fila_inicio': fila_inicio,
+        #     'fila_fin': inicio_grupo - 1,
+        #     'total_filas': inicio_grupo - fila_inicio,
+        #     'rango_inicial': self.lector.leer_valor_estanteria(fila_inicio),
+        #     'rango_final': self.lector.leer_valor_estanteria(inicio_grupo - 1)
+        # }
     
-    def _encontrar_inicio_grupo(self, fila_desde, valor_buscado):
-        """retrocede para encontrar donde empieza el grupo con el mismo valor"""
-        fila = fila_desde
-        while fila >= self.config.FILA_INICIAL:
-            valor_actual = self.lector.leer_valor_estanteria(fila)
-            if valor_actual != valor_buscado:
-                return fila + 1
-            fila -= 1
-        return self.config.FILA_INICIAL
-    
-    def _encontrar_fin_grupo(self, fila_desde, valor_buscado):
-        """avanza para encontrar donde termina el grupo con el mismo valor"""
-        fila = fila_desde
-        while fila <= self.ultima_fila_excel:
-            valor_actual = self.lector.leer_valor_estanteria(fila)
-            if valor_actual != valor_buscado:
-                return fila - 1
-            fila += 1
-        return self.ultima_fila_excel
+    # COMENTADO: metodos de busqueda de grupos de estanteria
+    # def _encontrar_inicio_grupo(self, fila_desde, valor_buscado):
+    #     """retrocede para encontrar donde empieza el grupo con el mismo valor"""
+    #     fila = fila_desde
+    #     while fila >= self.config.FILA_INICIAL:
+    #         valor_actual = self.lector.leer_valor_estanteria(fila)
+    #         if valor_actual != valor_buscado:
+    #             return fila + 1
+    #         fila -= 1
+    #     return self.config.FILA_INICIAL
+    # 
+    # def _encontrar_fin_grupo(self, fila_desde, valor_buscado):
+    #     """avanza para encontrar donde termina el grupo con el mismo valor"""
+    #     fila = fila_desde
+    #     while fila <= self.ultima_fila_excel:
+    #         valor_actual = self.lector.leer_valor_estanteria(fila)
+    #         if valor_actual != valor_buscado:
+    #             return fila - 1
+    #         fila += 1
+    #     return self.ultima_fila_excel
 
 
 # ********************************************** generacion del pdf **********************************************
@@ -384,16 +390,14 @@ class GeneradorEtiquetas:
         siguiente = max_numero + 1
         return str(siguiente)
     
-    def _obtener_nombre_archivo(self, numero_archivo, rango_inicial, rango_final):
+    def _obtener_nombre_archivo(self, numero_archivo, lote):
         """genera el nombre del archivo pdf"""
-        rango_inicial_limpio = rango_inicial.replace('*', '').replace('/', '-').replace('\\', '-').replace(':', '-')
-        rango_final_limpio = rango_final.replace('*', '').replace('/', '-').replace('\\', '-').replace(':', '-')
-        
-        return f"{numero_archivo}{self.config.ABREVIACION_FACULTAD} {rango_inicial_limpio} - {rango_final_limpio}.pdf"
+        # Generar nombre basado en filas en lugar de rango de estanteria
+        return f"{numero_archivo}{self.config.ABREVIACION_FACULTAD}_filas_{lote['fila_inicio']}-{lote['fila_fin']}.pdf"
     
     # **************************** dibujo de titulos ****************************
     
-    def _dibujar_titulo_principal(self, c, ancho_hoja, alto_hoja, rango_inicial, rango_final):
+    def _dibujar_titulo_principal(self, c, ancho_hoja, alto_hoja):
         """dibuja el titulo principal en la parte superior de la pagina"""
         pos_x = 5.52 * cm
         ancho = 9.97 * cm
@@ -404,20 +408,12 @@ class GeneradorEtiquetas:
         c.setFillColorRGB(0, 0, 0)
         c.setFont(self.fuente_bold, self.config.TAMANO_FUENTE_TITULO)
         
-        # linea 1 - biblioteca y ubicacion
-        y_linea1 = pos_y + alto - 0.35 * cm
+        # titulo - solo ABREVIACION_FACULTAD
+        y_titulo = pos_y + alto - 0.35 * cm
         c.drawCentredString(
             centro_x, 
-            y_linea1, 
-            f"BIBLIOTECA {self.config.ABREVIACION_FACULTAD} - UBICACION ESTANTERIA"
-        )
-        
-        # linea 2 - rango de estanteria
-        y_linea2 = pos_y + 0.25 * cm
-        c.drawCentredString(
-            centro_x, 
-            y_linea2, 
-            f"{rango_inicial} - {rango_final}"
+            y_titulo, 
+            self.config.ABREVIACION_FACULTAD
         )
     
     # **************************** dibujo de elementos - imagenes ****************************
@@ -583,9 +579,9 @@ class GeneradorEtiquetas:
     
     # ******************************** composicion de pagina ********************************
     
-    def _dibujar_pagina(self, c, codigos_pagina, ancho_hoja, alto_hoja, rango_inicial, rango_final):
+    def _dibujar_pagina(self, c, codigos_pagina, ancho_hoja, alto_hoja):
         """dibuja una pagina completa con titulo y grid de etiquetas"""
-        self._dibujar_titulo_principal(c, ancho_hoja, alto_hoja, rango_inicial, rango_final)
+        self._dibujar_titulo_principal(c, ancho_hoja, alto_hoja)
         
         posiciones_x = self._calcular_posiciones_x()
         posiciones_y = self._calcular_posiciones_y(alto_hoja)
@@ -605,7 +601,7 @@ class GeneradorEtiquetas:
     
     def generar_pdf_lote(self, lote, codigos, numero_archivo):
         """genera un archivo pdf para un lote especifico"""
-        nombre_archivo = self._obtener_nombre_archivo(numero_archivo, lote['rango_inicial'], lote['rango_final'])
+        nombre_archivo = self._obtener_nombre_archivo(numero_archivo, lote)
         c = canvas.Canvas(nombre_archivo, pagesize=A4)
         ancho_hoja, alto_hoja = A4
         
@@ -620,7 +616,7 @@ class GeneradorEtiquetas:
             inicio = num_pagina * self.config.CUADROS_POR_HOJA
             fin = min(inicio + self.config.CUADROS_POR_HOJA, total_codigos)
             codigos_pagina = codigos[inicio:fin]
-            self._dibujar_pagina(c, codigos_pagina, ancho_hoja, alto_hoja, lote['rango_inicial'], lote['rango_final'])
+            self._dibujar_pagina(c, codigos_pagina, ancho_hoja, alto_hoja)
             c.showPage()
         
         c.save()
@@ -629,9 +625,10 @@ class GeneradorEtiquetas:
 
 # ************************************* ejecucion principal *************************************
 
-def main():
+def main(config=None):
     """funcion principal que ejecuta todo el proceso automatizado"""
-    config = Config()
+    if config is None:
+        config = Config()
     
     # leer el excel para obtener datos
     lector = LectorExcel(config)
@@ -666,7 +663,7 @@ def main():
         codigos = lector.leer_codigos_rango(lote['fila_inicio'], lote['fila_fin'])
         generador.generar_pdf_lote(lote, codigos, numero_archivo)
         
-        # pintar excel - si se cargo correctamente
+        # pintar excel con colores alternados por lote
         if pintor_activo:
             pintor.pintar_rango(lote['fila_inicio'], lote['fila_fin'], i)
     
